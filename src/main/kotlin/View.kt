@@ -14,7 +14,7 @@ fun HTML.createUrlPage(
             postForm(
                 encType = FormEncType.applicationXWwwFormUrlEncoded,
                 action = "/create-url",
-                classes = "w-full max-w-xl flex flex-col items-center space-y-8"
+                classes = "w-full max-w-6xl flex flex-col items-center space-y-8"
             ) {
                 input(
                     type = InputType.url,
@@ -31,7 +31,7 @@ fun HTML.createUrlPage(
                 }
 
                 button(
-                    classes = "w-full sm:w-auto border px-4 py-2 rounded hover:bg-onbrand hover:text-brand transition"
+                    classes = "w-full md:min-w-36 sm:w-auto border px-4 py-2 rounded hover:bg-onbrand hover:text-brand transition"
                 ) { +"Go" }
             }
         }
