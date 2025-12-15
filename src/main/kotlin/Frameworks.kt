@@ -110,7 +110,9 @@ fun Application.configureFrameworks() {
         provide<CreateShortUrl> {
             CreateShortUrlImpl(cacheAccessor = { resolve() })
         }
-        provide<FindShortUrlByKey> { FindShortUrlByKeyImpl() }
+        provide<FindShortUrlByKey> {
+            FindShortUrlByKeyImpl(cacheAccessor = { resolve() })
+        }
         provide<ShortUrlServiceConfiguration> { appConfig }
     }
 }

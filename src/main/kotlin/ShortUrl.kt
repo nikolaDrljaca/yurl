@@ -120,15 +120,25 @@ class CreateShortUrlImpl(
 }
 
 fun interface FindShortUrlByKey {
-    suspend fun execute(key: String): ShortUrl?
+    suspend fun execute(key: String): String?
 }
 
-class FindShortUrlByKeyImpl : FindShortUrlByKey {
-    override suspend fun execute(key: String): ShortUrl? = transaction {
-        ShortUrlTable.selectAll()
-            .where { ShortUrlTable.key eq key }
-            .map { it.asHop() }
-            .singleOrNull()
+class FindShortUrlByKeyImpl(
+    private val cacheAccessor: suspend () -> GlideClient?
+) : FindShortUrlByKey {
+    override suspend fun execute(key: String): String? {
+        val cache = cacheAccessor()
+        return when {
+            cache != null -> cache.get(key)?.await()
+
+            else -> transaction {
+                ShortUrlTable.selectAll()
+                    .where { ShortUrlTable.key eq key }
+                    .map { it.asHop() }
+                    .singleOrNull()
+                    ?.url
+            }
+        }
     }
 
     private fun ResultRow.asHop() = ShortUrl(
