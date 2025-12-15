@@ -83,17 +83,23 @@ fun Application.configureShortUrlRoutes() = routing {
         }
     }
 
+    post("/create-url") {
+        val params = call.receiveParameters()
+        log.info("create-url called with $params")
+        val url = params["url"]
+        // handle response
+        when (val result = createShortUrl.execute(url)) {
+            is ShortUrlResult.InvalidUrl -> call.respondRedirect("/400")
+            is ShortUrlResult.NoUrl -> call.respondRedirect("/400")
+            is ShortUrlResult.Success -> call.respondRedirect("/${result.data.key}")
+        }
+    }
+
     get("/l/{hop_key}") {
         val key = requireNotNull(call.pathParameters["hop_key"])
         log.info("findHop called with $key.")
 
-        val cache: GlideClient? = dependencies.resolve()
-
-        val hop = when {
-            cache != null -> cache.get(key)?.await()
-
-            else -> findHop.execute(key)?.url
-        }
+        val hop = findHop.execute(key)
 
         when {
             hop != null -> call.respondRedirect(url = hop, permanent = false)
@@ -105,37 +111,37 @@ fun Application.configureShortUrlRoutes() = routing {
 
 fun Application.configureViewRoutes() = routing {
     val createShortUrl: CreateShortUrl by dependencies
+    val findHopByKey: FindShortUrlByKey by dependencies
     val config: ShortUrlServiceConfiguration by dependencies
     // static assets
     staticResources("/", "public")
 
-    post("/create-url") {
-        val params = call.receiveParameters()
-        log.info("create-url called with $params")
-        val url = params["url"]
-        // handle response
-        when (val result = createShortUrl.execute(url)) {
-            is ShortUrlResult.InvalidUrl -> call.respondHtml {
-                yurlErrorPage(
-                    code = HttpStatusCode.BadRequest,
-                    basePath = config.basePath
-                )
-            }
+    get("/{slug}") {
+        val key = requireNotNull(call.pathParameters["slug"])
+        // make sure the key actually resolves to something
+        val hop = findHopByKey.execute(key)
 
-            is ShortUrlResult.NoUrl -> call.respondHtml {
-                yurlErrorPage(
-                    code = HttpStatusCode.BadRequest,
-                    basePath = config.basePath
-                )
-            }
+        when {
+            hop == null -> call.respondRedirect("/400")
 
-            is ShortUrlResult.Success -> call.respondHtml {
+            else -> call.respondHtml {
                 shortUrlCreatedPage(
                     basePath = config.basePath,
-                    createdUrl = createFullUrl(config.basePath, result.data.key)
+                    createdUrl = createFullUrl(
+                        config.basePath,
+                        key
+                    )
                 )
             }
+        }
+    }
 
+    get("/400") {
+        call.respondHtml {
+            yurlErrorPage(
+                code = HttpStatusCode.BadRequest,
+                basePath = config.basePath
+            )
         }
     }
 
