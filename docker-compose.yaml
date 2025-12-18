@@ -17,6 +17,9 @@ services:
       # API_KEY: ${API_KEY}
       # NOTE: Will be added on Coolify as env variable
       BASE_PATH: ${BASE_PATH}
+    security_opt:
+      - "no-new-privileges=true"
+    restart: on-failure:5
     depends_on:
       hop-cache:
         condition: service_healthy
