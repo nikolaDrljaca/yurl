@@ -1,4 +1,4 @@
-# PROD docker compose script
+# PRODLIKE docker compose script
 
 services:
   yurl-service:
@@ -16,6 +16,9 @@ services:
       VALKEY_HOST: "yurl-cache"
       VALKEY_PORT: "6379"
       BASE_PATH: "http://localhost:5000"
+    security_opt:
+      - "no-new-privileges=true"
+    restart: on-failure:5
     depends_on:
       hop-cache:
           condition: service_healthy
