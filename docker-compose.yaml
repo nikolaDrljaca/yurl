@@ -2,10 +2,9 @@
 
 services:
   hop-service:
+    image: yurl:2025.1
     build: .
     container_name: hop-service
-    ports:
-      - "5000:5000"
     volumes:
       # Mount SQLite file into container at /data/db.sqlite
       - sqlite-data:/data
@@ -17,9 +16,15 @@ services:
       # API_KEY: ${API_KEY}
       # NOTE: Will be added on Coolify as env variable
       BASE_PATH: ${BASE_PATH}
+
+    # hardening
     security_opt:
       - "no-new-privileges=true"
     restart: on-failure:5
+    cpus: '0.5'
+    mem_limit: 512m
+
+    # orchestration
     depends_on:
       hop-cache:
         condition: service_healthy
