@@ -2,6 +2,7 @@
 
 services:
   yurl-service:
+    image: yurl:2025.1
     build: .
     container_name: yurl-service
     ports:
@@ -16,9 +17,15 @@ services:
       VALKEY_HOST: "yurl-cache"
       VALKEY_PORT: "6379"
       BASE_PATH: "http://localhost:5000"
+
+    # hardening
     security_opt:
       - "no-new-privileges=true"
     restart: on-failure:5
+    cpus: '0.5'
+    mem_limit: 512m
+
+    # orchestration
     depends_on:
       hop-cache:
           condition: service_healthy
