@@ -3,11 +3,13 @@ package com.drbrosdev
 import glide.api.GlideClient
 import io.ktor.http.*
 import org.apache.commons.lang3.RandomStringUtils
-import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import kotlinx.coroutines.future.await
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.*
@@ -67,7 +69,7 @@ class CreateShortUrlImpl(
         }
 
         // store in database
-        var output = transaction {
+        var output = suspendTransaction {
             // create new key and insert
             val row = retry {
                 ShortUrlTable.insert {
@@ -131,7 +133,7 @@ class FindShortUrlByKeyImpl(
         return when {
             cache != null -> cache.get(key)?.await()
 
-            else -> transaction {
+            else -> suspendTransaction {
                 ShortUrlTable.selectAll()
                     .where { ShortUrlTable.key eq key }
                     .map { it.asHop() }

@@ -10,17 +10,31 @@ import io.ktor.server.plugins.di.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
 import kotlinx.serialization.Serializable
 import java.time.format.DateTimeFormatter
+import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 
 fun Application.configureRouting() {
-    routing {
-        get("/info") {
-            call.respondText("hop-service")
+    configureMaintenanceRoutes()
+    configureShortUrlRoutes()
+    configureViewRoutes()
+}
+
+fun Application.configureMaintenanceRoutes() = routing {
+    get("/health") {
+        val result = runCatching {
+            suspendTransaction {
+                exec("SELECT 1;")
+            }
         }
-        get("/health") {
+        result.onFailure {
+            if (it is CancellationException) throw it
+            call.respond(HttpStatusCode.ServiceUnavailable)
+        }
+        result.onSuccess {
             call.respond(HttpStatusCode.OK)
         }
     }

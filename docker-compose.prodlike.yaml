@@ -29,6 +29,12 @@ services:
     depends_on:
       hop-cache:
           condition: service_healthy
+    # health
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   hop-cache:
     image: "valkey/valkey:8-alpine"
