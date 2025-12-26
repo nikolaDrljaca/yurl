@@ -13,6 +13,4 @@ fun Application.module() {
     configureSerialization()
     configureHTTP()
     configureRouting()
-    configureShortUrlRoutes()
-    configureViewRoutes()
 }

@@ -1,5 +1,5 @@
 [versions]
-exposed = "0.61.0"
+exposed = "1.0.0-rc-3"
 sqlite = "3.49.1.0"
 kotlin = "2.1.10"
 ktor = "3.2.3"

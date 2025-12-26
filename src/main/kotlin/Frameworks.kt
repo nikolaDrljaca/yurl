@@ -9,12 +9,11 @@ import io.ktor.util.logging.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.transactions.TransactionManager
-import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
-import org.jetbrains.exposed.sql.transactions.transaction
 import java.sql.Connection
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 val LOG = KtorSimpleLogger("HopService")
 
@@ -36,10 +35,6 @@ fun Application.configureDatabase() {
         SchemaUtils.create(ShortUrlTable)
     }
 }
-
-
-suspend fun <T> transaction(block: suspend () -> T): T =
-    newSuspendedTransaction(Dispatchers.IO) { block() }
 
 // DI
 
