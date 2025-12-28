@@ -93,6 +93,7 @@ fun ApplicationEnvironment.configuration(): ShortUrlServiceConfiguration {
 fun Application.configureFrameworks() {
     val valkeyConfig = environment.valkeyConfiguration()
     val appConfig = environment.configuration()
+    val log = log
 
     dependencies {
         provide<GlideClient?> {
@@ -108,6 +109,14 @@ fun Application.configureFrameworks() {
         provide<FindShortUrlByKey> {
             FindShortUrlByKeyImpl(cacheAccessor = { resolve() })
         }
-        provide<ShortUrlServiceConfiguration> { appConfig }
+
+        provide<ShortUrlRouteDeps> {
+            ShortUrlRouteDeps(
+                findHop = resolve(),
+                createShortUrl = resolve(),
+                config = appConfig,
+                log = log
+            )
+        }
     }
 }

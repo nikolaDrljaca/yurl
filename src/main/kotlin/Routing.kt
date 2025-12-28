@@ -7,9 +7,11 @@ import io.ktor.server.html.*
 import io.ktor.server.http.content.*
 import io.ktor.server.plugins.*
 import io.ktor.server.plugins.di.*
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.util.logging.Logger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
@@ -17,13 +19,16 @@ import kotlinx.serialization.Serializable
 import java.time.format.DateTimeFormatter
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 
-fun Application.configureRouting() {
+fun Application.configureRouting() = routing {
     configureMaintenanceRoutes()
-    configureShortUrlRoutes()
-    configureViewRoutes()
+
+    val shortUrlDeps: ShortUrlRouteDeps by dependencies
+
+    configureShortUrlRoutes(shortUrlDeps)
+    configureViewRoutes(shortUrlDeps)
 }
 
-fun Application.configureMaintenanceRoutes() = routing {
+fun Route.configureMaintenanceRoutes() {
     get("/health") {
         val result = runCatching {
             suspendTransaction {
@@ -71,28 +76,32 @@ fun createFullUrl(
     slug: String
 ): String = "$basePath/l/${slug}"
 
-fun Application.configureShortUrlRoutes() = routing {
-    /*
-    NOTE: Since these are accessed here, they are created immediately on app startup
-    and are essentially singletons
-     */
-    val findHop: FindShortUrlByKey by dependencies
-    val createShortUrl: CreateShortUrl by dependencies
-    val config: ShortUrlServiceConfiguration by dependencies
+data class ShortUrlRouteDeps(
+    val findHop: FindShortUrlByKey,
+    val createShortUrl: CreateShortUrl,
+    val config: ShortUrlServiceConfiguration,
+    val log: Logger
+)
 
-    post("/l") {
-        // parse payload and create hop
-        val payload = call.receive<CreateShortUrlPayload>()
-        log.info("createHop called with $payload.")
-        // prepare response
-        when (val result = createShortUrl.execute(payload.url)) {
-            is ShortUrlResult.InvalidUrl -> call.respond(HttpStatusCode.BadRequest, "")
+fun Route.configureShortUrlRoutes(
+    dependencies: ShortUrlRouteDeps
+) = with(dependencies) {
 
-            is ShortUrlResult.NoUrl -> call.respond(HttpStatusCode.BadRequest, "")
+    rateLimit(Limiters.CREATE_HOP) {
+        post("/l") {
+            // parse payload and create hop
+            val payload = call.receive<CreateShortUrlPayload>()
+            log.info("createHop called with $payload.")
+            // prepare response
+            when (val result = createShortUrl.execute(payload.url)) {
+                is ShortUrlResult.InvalidUrl -> call.respond(HttpStatusCode.BadRequest, "")
 
-            is ShortUrlResult.Success -> {
-                val response = ShortUrlDto.from(result.data, config.basePath)
-                call.respond(HttpStatusCode.Created, response)
+                is ShortUrlResult.NoUrl -> call.respond(HttpStatusCode.BadRequest, "")
+
+                is ShortUrlResult.Success -> {
+                    val response = ShortUrlDto.from(result.data, config.basePath)
+                    call.respond(HttpStatusCode.Created, response)
+                }
             }
         }
     }
@@ -109,31 +118,31 @@ fun Application.configureShortUrlRoutes() = routing {
         }
     }
 
-    get("/l/{hop_key}") {
-        val key = requireNotNull(call.pathParameters["hop_key"])
-        log.info("findHop called with $key.")
+    rateLimit(Limiters.FIND_HOP) {
+        get("/l/{hop_key}") {
+            val key = requireNotNull(call.pathParameters["hop_key"])
+            log.info("findHop called with $key.")
 
-        val hop = findHop.execute(key)
+            val hop = findHop.execute(key)
 
-        when {
-            hop != null -> call.respondRedirect(url = hop, permanent = false)
+            when {
+                hop != null -> call.respondRedirect(url = hop, permanent = false)
 
-            else -> call.respond(HttpStatusCode.NotFound)
+                else -> call.respond(HttpStatusCode.NotFound)
+            }
         }
     }
 }
 
-fun Application.configureViewRoutes() = routing {
-    val createShortUrl: CreateShortUrl by dependencies
-    val findHopByKey: FindShortUrlByKey by dependencies
-    val config: ShortUrlServiceConfiguration by dependencies
+fun Route.configureViewRoutes(dependencies: ShortUrlRouteDeps) = with(dependencies) {
+
     // static assets
     staticResources("/", "public")
 
     get("/{slug}") {
         val key = requireNotNull(call.pathParameters["slug"])
         // make sure the key actually resolves to something
-        val hop = findHopByKey.execute(key)
+        val hop = findHop.execute(key)
 
         when {
             hop == null -> call.respondRedirect("/400")
