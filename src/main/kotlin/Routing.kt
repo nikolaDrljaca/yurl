@@ -10,6 +10,7 @@ import io.ktor.server.plugins.di.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.util.logging.Logger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
@@ -17,13 +18,16 @@ import kotlinx.serialization.Serializable
 import java.time.format.DateTimeFormatter
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 
-fun Application.configureRouting() {
+fun Application.configureRouting() = routing {
     configureMaintenanceRoutes()
-    configureShortUrlRoutes()
-    configureViewRoutes()
+
+    val shortUrlDeps: ShortUrlRouteDeps by dependencies
+
+    configureShortUrlRoutes(shortUrlDeps)
+    configureViewRoutes(shortUrlDeps)
 }
 
-fun Application.configureMaintenanceRoutes() = routing {
+fun Route.configureMaintenanceRoutes() {
     get("/health") {
         val result = runCatching {
             suspendTransaction {
@@ -71,14 +75,14 @@ fun createFullUrl(
     slug: String
 ): String = "$basePath/l/${slug}"
 
-fun Application.configureShortUrlRoutes() = routing {
-    /*
-    NOTE: Since these are accessed here, they are created immediately on app startup
-    and are essentially singletons
-     */
-    val findHop: FindShortUrlByKey by dependencies
-    val createShortUrl: CreateShortUrl by dependencies
-    val config: ShortUrlServiceConfiguration by dependencies
+data class ShortUrlRouteDeps(
+    val findHop: FindShortUrlByKey,
+    val createShortUrl: CreateShortUrl,
+    val config: ShortUrlServiceConfiguration,
+    val log: Logger
+)
+
+fun Route.configureShortUrlRoutes(dependencies: ShortUrlRouteDeps) = with(dependencies) {
 
     post("/l") {
         // parse payload and create hop
@@ -123,17 +127,15 @@ fun Application.configureShortUrlRoutes() = routing {
     }
 }
 
-fun Application.configureViewRoutes() = routing {
-    val createShortUrl: CreateShortUrl by dependencies
-    val findHopByKey: FindShortUrlByKey by dependencies
-    val config: ShortUrlServiceConfiguration by dependencies
+fun Route.configureViewRoutes(dependencies: ShortUrlRouteDeps) = with(dependencies) {
+
     // static assets
     staticResources("/", "public")
 
     get("/{slug}") {
         val key = requireNotNull(call.pathParameters["slug"])
         // make sure the key actually resolves to something
-        val hop = findHopByKey.execute(key)
+        val hop = findHop.execute(key)
 
         when {
             hop == null -> call.respondRedirect("/400")
