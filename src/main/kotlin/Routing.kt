@@ -7,6 +7,7 @@ import io.ktor.server.html.*
 import io.ktor.server.http.content.*
 import io.ktor.server.plugins.*
 import io.ktor.server.plugins.di.*
+import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -82,21 +83,25 @@ data class ShortUrlRouteDeps(
     val log: Logger
 )
 
-fun Route.configureShortUrlRoutes(dependencies: ShortUrlRouteDeps) = with(dependencies) {
+fun Route.configureShortUrlRoutes(
+    dependencies: ShortUrlRouteDeps
+) = with(dependencies) {
 
-    post("/l") {
-        // parse payload and create hop
-        val payload = call.receive<CreateShortUrlPayload>()
-        log.info("createHop called with $payload.")
-        // prepare response
-        when (val result = createShortUrl.execute(payload.url)) {
-            is ShortUrlResult.InvalidUrl -> call.respond(HttpStatusCode.BadRequest, "")
+    rateLimit(Limiters.CREATE_HOP) {
+        post("/l") {
+            // parse payload and create hop
+            val payload = call.receive<CreateShortUrlPayload>()
+            log.info("createHop called with $payload.")
+            // prepare response
+            when (val result = createShortUrl.execute(payload.url)) {
+                is ShortUrlResult.InvalidUrl -> call.respond(HttpStatusCode.BadRequest, "")
 
-            is ShortUrlResult.NoUrl -> call.respond(HttpStatusCode.BadRequest, "")
+                is ShortUrlResult.NoUrl -> call.respond(HttpStatusCode.BadRequest, "")
 
-            is ShortUrlResult.Success -> {
-                val response = ShortUrlDto.from(result.data, config.basePath)
-                call.respond(HttpStatusCode.Created, response)
+                is ShortUrlResult.Success -> {
+                    val response = ShortUrlDto.from(result.data, config.basePath)
+                    call.respond(HttpStatusCode.Created, response)
+                }
             }
         }
     }
@@ -113,16 +118,18 @@ fun Route.configureShortUrlRoutes(dependencies: ShortUrlRouteDeps) = with(depend
         }
     }
 
-    get("/l/{hop_key}") {
-        val key = requireNotNull(call.pathParameters["hop_key"])
-        log.info("findHop called with $key.")
+    rateLimit(Limiters.FIND_HOP) {
+        get("/l/{hop_key}") {
+            val key = requireNotNull(call.pathParameters["hop_key"])
+            log.info("findHop called with $key.")
 
-        val hop = findHop.execute(key)
+            val hop = findHop.execute(key)
 
-        when {
-            hop != null -> call.respondRedirect(url = hop, permanent = false)
+            when {
+                hop != null -> call.respondRedirect(url = hop, permanent = false)
 
-            else -> call.respond(HttpStatusCode.NotFound)
+                else -> call.respond(HttpStatusCode.NotFound)
+            }
         }
     }
 }

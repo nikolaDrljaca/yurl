@@ -25,6 +25,7 @@ ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref 
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 commons-lang = { module = "org.apache.commons:commons-lang3", version.ref = "apache-commons" }
 valkey-glide = { module = "io.valkey:valkey-glide", version.ref = "valkey" }
+ktor-server-rate-limiter = { module = "io.ktor:ktor-server-rate-limit", version.ref = "ktor"}
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
