@@ -1,11 +1,9 @@
 package com.drbrosdev
 
-import glide.api.GlideClient
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.html.*
 import io.ktor.server.http.content.*
-import io.ktor.server.plugins.*
 import io.ktor.server.plugins.di.*
 import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.*
@@ -13,18 +11,17 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.util.logging.Logger
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.future.await
 import kotlinx.serialization.Serializable
 import java.time.format.DateTimeFormatter
 import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 
 fun Application.configureRouting() = routing {
-    configureMaintenanceRoutes()
-
     val shortUrlDeps: ShortUrlRouteDeps by dependencies
 
+    configureMaintenanceRoutes()
+
     configureShortUrlRoutes(shortUrlDeps)
+
     configureViewRoutes(shortUrlDeps)
 }
 
@@ -63,10 +60,10 @@ data class ShortUrlDto(
     companion object {
         fun from(value: ShortUrl, basePath: String) = ShortUrlDto(
             id = value.id.toString(),
-            key = value.key,
-            url = value.url,
+            key = value.shortCode.value,
+            url = value.targetUrl.url(),
             createdAt = value.createdAt.format(DateTimeFormatter.ISO_DATE),
-            fullUrl = "$basePath/l/${value.key}"
+            fullUrl = "$basePath/l/${value.shortCode.value}"
         )
     }
 }
@@ -96,8 +93,6 @@ fun Route.configureShortUrlRoutes(
             when (val result = createShortUrl.execute(payload.url)) {
                 is ShortUrlResult.InvalidUrl -> call.respond(HttpStatusCode.BadRequest, "")
 
-                is ShortUrlResult.NoUrl -> call.respond(HttpStatusCode.BadRequest, "")
-
                 is ShortUrlResult.Success -> {
                     val response = ShortUrlDto.from(result.data, config.basePath)
                     call.respond(HttpStatusCode.Created, response)
@@ -113,8 +108,8 @@ fun Route.configureShortUrlRoutes(
         // handle response
         when (val result = createShortUrl.execute(url)) {
             is ShortUrlResult.InvalidUrl -> call.respondRedirect("/400")
-            is ShortUrlResult.NoUrl -> call.respondRedirect("/400")
-            is ShortUrlResult.Success -> call.respondRedirect("/${result.data.key}")
+
+            is ShortUrlResult.Success -> call.respondRedirect("/${result.data.shortCode.value}")
         }
     }
 
@@ -141,7 +136,7 @@ fun Route.configureViewRoutes(dependencies: ShortUrlRouteDeps) = with(dependenci
 
     get("/{slug}") {
         val key = requireNotNull(call.pathParameters["slug"])
-        // make sure the key actually resolves to something
+        // make sure the shortCode actually resolves to something
         val hop = findHop.execute(key)
 
         when {

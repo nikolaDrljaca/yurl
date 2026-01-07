@@ -32,7 +32,7 @@ val ApiKeyAuthPlugin = createApplicationPlugin(
     createConfiguration = ::ApiKeyAuthPluginConfiguration
 ) {
     val apiKey = pluginConfig.apiKey
-    application.log.info("Initializing ApiKeyAuth plugin with key:$apiKey.")
+    application.log.info("Initializing ApiKeyAuth plugin with shortCode:$apiKey.")
 
     onCall { call ->
         val incoming = call.request.headers[HopHeaders.API_KEY]

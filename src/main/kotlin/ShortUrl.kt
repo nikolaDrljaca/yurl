@@ -32,11 +32,28 @@ object ShortUrlTable : Table() {
 }
 
 // Domain
+//
+
+@JvmInline
+value class ShortCode(val value: String)
+
+@JvmInline
+value class TargetUrl(val value: String?) {
+    init {
+        // validate incoming targetUrl
+        requireNotNull(value)
+        requireNotNull(parseUrl(value)).also {
+            require(it.protocol in setOf(URLProtocol.HTTP, URLProtocol.HTTPS))
+        }
+    }
+}
+
+fun TargetUrl.url() = value!!
 
 data class ShortUrl(
     val id: UUID,
-    val key: String,
-    val url: String,
+    val shortCode: ShortCode,
+    val targetUrl: TargetUrl,
     val createdAt: LocalDate
 )
 
@@ -44,8 +61,6 @@ sealed interface ShortUrlResult {
     data class Success(val data: ShortUrl) : ShortUrlResult
 
     data object InvalidUrl : ShortUrlResult
-
-    data object NoUrl : ShortUrlResult
 }
 
 // Use Cases
@@ -58,38 +73,35 @@ class CreateShortUrlImpl(
     private val cacheAccessor: suspend () -> GlideClient?
 ) : CreateShortUrl {
     override suspend fun execute(url: String?): ShortUrlResult {
-        // validate incoming url
-        if (url == null) {
-            return ShortUrlResult.NoUrl
-        }
-        val parsed = parseUrl(url) ?: return ShortUrlResult.InvalidUrl
+        val targetUrl = runCatching { TargetUrl(url) }
 
-        if (parsed.protocol !in setOf(URLProtocol.HTTP, URLProtocol.HTTPS)) {
+        if (targetUrl.isFailure) {
             return ShortUrlResult.InvalidUrl
         }
+        val actual = targetUrl.getOrThrow().url()
 
         // store in database
         var output = suspendTransaction {
-            // create new key and insert
+            // create new shortCode and insert
             val row = retry {
                 ShortUrlTable.insert {
                     it[ShortUrlTable.key] = createKey()
-                    it[ShortUrlTable.longUrl] = url
+                    it[ShortUrlTable.longUrl] = actual
                 }
             }
-            requireNotNull(row) { "Unable to generate unique hop key!" }
+            requireNotNull(row) { "Unable to generate unique hop shortCode!" }
             ShortUrl(
                 id = row[ShortUrlTable.id],
-                key = row[ShortUrlTable.key],
-                url = row[ShortUrlTable.longUrl],
+                shortCode = ShortCode(row[ShortUrlTable.key]),
+                targetUrl = TargetUrl(row[ShortUrlTable.longUrl]),
                 createdAt = LocalDate.parse(row[ShortUrlTable.createdAt])
             ).also {
-                LOG.info("Generated ${it.key} for ${it.url}.")
+                LOG.info("Generated ${it.shortCode} for ${it.targetUrl}.")
             }
         }
 
         // store in cache
-        cacheAccessor()?.set(output.key, output.url)?.await()
+        cacheAccessor()?.set(output.shortCode.value, output.targetUrl.url())?.await()
 
         // return
         return ShortUrlResult.Success(output)
@@ -136,17 +148,18 @@ class FindShortUrlByKeyImpl(
             else -> suspendTransaction {
                 ShortUrlTable.selectAll()
                     .where { ShortUrlTable.key eq key }
-                    .map { it.asHop() }
+                    .map { it.asShortUrl() }
                     .singleOrNull()
-                    ?.url
+                    ?.targetUrl
+                    ?.value
             }
         }
     }
 
-    private fun ResultRow.asHop() = ShortUrl(
+    private fun ResultRow.asShortUrl() = ShortUrl(
         id = this[ShortUrlTable.id],
-        key = this[ShortUrlTable.key],
-        url = this[ShortUrlTable.longUrl],
+        shortCode = ShortCode(this[ShortUrlTable.key]),
+        targetUrl = TargetUrl(this[ShortUrlTable.longUrl]),
         createdAt = LocalDate.parse(this[ShortUrlTable.createdAt])
     )
 }
