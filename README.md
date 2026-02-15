@@ -23,6 +23,32 @@ If the server starts successfully, you'll see the following output:
 2024-12-04 14:32:45.682 [main] INFO  Application - Responding at http://0.0.0.0:8080
 ```
 
+### Interacting with Docker
+
+To interact with the docker stacks, use `just` (or `make` alternatively).
+
+When using `just`:
+```sh
+
+# view available recipes
+just -l # or just --list
+
+# get help on using a recipe
+just --usage {recipe_name}
+
+# to run recipes
+just up {...arguments}
+
+```
+
+In general, for this project:
+| Task                          | Description                                                          |
+| ------------------------------|--------------------------------------------------------------------- |
+| `just up local`               | Start the LOCAL docker stack.                                        |
+| `just down local`             | Stop(down) LOCAL docker stack.                                       |
+| `just up prodlike`            | Build an executable JAR of the server with all dependencies included |
+| `just down prodlike`          | Build the docker image to use with the fat JAR                       |
+
 ## Design
 
 Main points for consideration:
